@@ -6,79 +6,93 @@
   <title>Spray of God</title>
   <style>
     :root{
-      --reveal-delay: 5500ms; /* 5.5s – adjust 5000–7000 */
+      --reveal-delay: 5500ms; /* 5–7 c */
       --fade-duration: 700ms;
-     
       --text-bg: rgba(0,0,0,.55);
     }
 
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{font-family:system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", sans-serif; background:#000; color:#fff; overflow:hidden}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans",sans-serif;background:#000;color:#fff;overflow:hidden}
 
-    /* Container layers */
-    .stage{position:fixed; inset:0; overflow:hidden;}
+    .stage{position:fixed;inset:0;overflow:hidden;}
 
-    /* Loading overlay */
-    .loader{position:absolute; inset:0; display:grid; place-items:center; background:#000; z-index:50; transition:opacity var(--fade-duration) ease;}
-    .loader.hidden{opacity:0; pointer-events:none}
-    .spinner{width:56px; height:56px; border-radius:50%; border:4px solid rgba(255,255,255,.25); border-top-color:#fff; animation:spin 1s linear infinite}
+    /* Loader */
+    .loader{position:absolute;inset:0;display:grid;place-items:center;background:#000;z-index:60;transition:opacity var(--fade-duration) ease;}
+    .loader.hidden{opacity:0;pointer-events:none}
+    .spinner{width:56px;height:56px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Background video */
-    .bg-video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; background:#000;}
+    /* Tap-to-play overlay if autoplay is blocked */
+    .tap{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6);z-index:70}
+    .tap.visible{display:grid}
+    .tap-btn{cursor:pointer;border:1px solid rgba(255,255,255,.6);padding:12px 18px;border-radius:12px;background:rgba(0,0,0,.35)}
+    .tap-btn:active{transform:scale(.98)}
 
-    /* Freeze-frame canvas (used at end for consistent last-frame) */
-    canvas.freeze{position:absolute; inset:0; width:100%; height:100%; display:none}
+    /* Video + freeze */
+    .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;background:#000;}
+    canvas.freeze{position:absolute;inset:0;width:100%;height:100%;display:none}
 
-    /* Delayed logo */
-    .logo{position:absolute; inset:0; display:grid; place-items:center; z-index:20; opacity:0; pointer-events:none; transition:opacity var(--fade-duration) ease, transform var(--fade-duration) ease;}
-    .logo.visible{opacity:1; pointer-events:auto}
-    .logo img{width:50%; height:var(--logo-size); object-fit:contain; filter:drop-shadow(0 6px 18px rgba(0,0,0,.55)); cursor:pointer;}
-    .logo.fading{opacity:0; transform:scale(.96)}
+    /* Logo */
+    .logo{position:absolute;inset:0;display:grid;place-items:center;z-index:20;opacity:0;pointer-events:none;transition:opacity var(--fade-duration) ease,transform var(--fade-duration) ease;}
+    .logo.visible{opacity:1;pointer-events:auto}
+    .logo img{width:50%;height:auto;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55));cursor:pointer;}
+    .logo.fading{opacity:0;transform:scale(.96)}
 
-    /* Reveal layer (image behind the logo; shown after click) */
-    .reveal{position:absolute; inset:0; background:#000 center/cover no-repeat; opacity:0; transition:opacity var(--fade-duration) ease; z-index:10}
+    /* Reveal image */
+    .reveal{position:absolute;inset:0;background:#000 center/cover no-repeat;opacity:0;transition:opacity var(--fade-duration) ease;z-index:10;cursor:pointer}
     .reveal.visible{opacity:1}
 
     /* Bottom text */
-    .cta{position:absolute; left:0; right:0; bottom:0; padding:20px clamp(16px, 4vw, 40px); z-index:30; display:flex; justify-content:center;}
-    .cta-inner{max-width:min(92ch, 96vw); background:var(--text-bg); backdrop-filter:saturate(120%) blur(6px); padding:14px 18px; border-radius:12px; line-height:1.35; transform:translateY(12px); opacity:0; transition:transform var(--fade-duration) ease, opacity var(--fade-duration) ease}
-    .cta.visible .cta-inner{opacity:1; transform:translateY(0)}
+    .cta{position:absolute;left:0;right:0;bottom:0;padding:20px clamp(16px,4vw,40px);z-index:30;display:flex;justify-content:center;}
+    .cta-inner{max-width:min(92ch,96vw);background:var(--text-bg);backdrop-filter:saturate(120%) blur(6px);padding:14px 18px;border-radius:12px;line-height:1.35;transform:translateY(12px);opacity:0;transition:transform var(--fade-duration) ease,opacity var(--fade-duration) ease}
+    .cta.visible .cta-inner{opacity:1;transform:translateY(0)}
 
-    /* Accessibility – reduce motion users get instant transitions */
     @media (prefers-reduced-motion: reduce){
       .spinner{animation:none}
-      .logo, .reveal, .loader, .cta-inner{transition:none}
+      .logo,.reveal,.loader,.cta-inner{transition:none}
     }
   </style>
 </head>
 <body>
   <div class="stage">
-    <!-- Loading overlay -->
+    <!-- Loader -->
     <div class="loader" id="loader" aria-live="polite" aria-busy="true">
       <div class="spinner" role="status" aria-label="Загрузка"></div>
     </div>
 
+    <!-- Tap-to-play (autoplay fallback) -->
+    <div class="tap" id="tap">
+      <div class="tap-btn" id="tapBtn">Нажмите, чтобы запустить видео</div>
+    </div>
 
     <!-- Background video -->
-    <video id="heroVideo" class="bg-video" preload="auto" playsinline muted autoplay>
-      <!-- Replace with your sources; keep MP4 (H.264) first for iOS/Android -->
+    <video
+      id="heroVideo"
+      class="bg-video"
+      preload="auto"
+      playsinline
+      muted
+      autoplay
+      poster="poster.jpg"  <!-- добавь постер, чтобы не было чёрного кадра -->
+    >
       <source src="assets/video.mp4" type="video/mp4" />
       <source src="back.webm" type="video/webm" />
       Ваш браузер не поддерживает видео тег.
     </video>
+
+    <!-- Freeze-frame canvas -->
     <canvas id="freezeCanvas" class="freeze"></canvas>
 
-    <!-- Center logo (appears after 5–7s of playback) -->
+    <!-- Center logo -->
     <div class="logo" id="logo" aria-hidden="true">
       <img src="logo_trans.png" alt="Логотип" id="logoImg" />
     </div>
 
-    <!-- Reveal image (becomes visible after logo click) -->
+    <!-- Reveal image -->
     <div class="reveal" id="reveal" style="background-image:url('flow.png')"></div>
 
-    <!-- Bottom text (shown together with reveal) -->
+    <!-- Bottom text -->
     <div class="cta" id="cta"><div class="cta-inner">
       <strong>Дорогая Диана</strong><br/>
       Я очень сильно тебя люблю и всецело верю в тебя и все твои начинания! Я хочу чтобы тебе сопутствовала удача и я стараюсь и буду стараться тебе как-то облегчить нагрузку, потому что ощущаю свою причастность и большое желание тебе помогать чем могу и как умею!))
@@ -89,15 +103,23 @@
     (function(){
       const video = document.getElementById('heroVideo');
       const loader = document.getElementById('loader');
+      const tap = document.getElementById('tap');
+      const tapBtn = document.getElementById('tapBtn');
       const logo = document.getElementById('logo');
       const reveal = document.getElementById('reveal');
       const cta = document.getElementById('cta');
       const freezeCanvas = document.getElementById('freezeCanvas');
+
       let logoTimer = null;
       let logoShown = false;
       let interacted = false;
+      let froze = false;
+      let autoplayChecked = false;
 
-      // Helper: show logo after a delay from first play
+      /* ---------- helpers ---------- */
+      const showLoader = () => loader.classList.remove('hidden');
+      const hideLoader = () => loader.classList.add('hidden');
+
       function scheduleLogo(){
         if(logoShown) return;
         clearTimeout(logoTimer);
@@ -108,41 +130,66 @@
       }
 
       function getDelay(){
-        // Read from CSS var (ms) and fallback to 5500
         const styles = getComputedStyle(document.documentElement);
         const val = styles.getPropertyValue('--reveal-delay').trim();
         const ms = parseInt(val);
         return Number.isFinite(ms) ? ms : 5500;
       }
 
-      // Hide loader when we can play smoothly
-      const hideLoader = ()=> loader.classList.add('hidden');
-      video.addEventListener('canplaythrough', hideLoader, {once:true});
-      video.addEventListener('loadeddata', ()=>{ // fallback if canplaythrough doesn’t fire on some mobiles
-        if(video.readyState >= 2) hideLoader();
+      /* ---------- autoplay attempt ---------- */
+      async function ensurePlayback(){
+        showLoader();
+        try {
+          await video.play();
+          // удачно — ждём реального старта (playing)
+        } catch(e){
+          // автоплей заблокирован — покажем тап-оверлей
+          tap.classList.add('visible');
+        } finally {
+          autoplayChecked = true;
+        }
+      }
+
+      // Первая попытка как можно раньше
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        ensurePlayback();
+      } else {
+        window.addEventListener('DOMContentLoaded', ensurePlayback, {once:true});
+      }
+
+      // Доп. попытка при первом взаимодействии пользователя
+      const userKick = async ()=>{
+        if (!autoplayChecked || tap.classList.contains('visible')) {
+          showLoader();
+          try{ await video.play(); tap.classList.remove('visible'); }catch(e){}
+        }
+      };
+      ['click','touchstart','keydown'].forEach(ev=>{
+        document.addEventListener(ev, userKick, {once:true, passive:true});
+      });
+      tapBtn.addEventListener('click', userKick);
+
+      /* ---------- loader logic: hide only on real playback ---------- */
+      video.addEventListener('playing', ()=>{ hideLoader(); scheduleLogo(); }, {once:false});
+      video.addEventListener('waiting', showLoader);
+      video.addEventListener('stalled', showLoader);
+      video.addEventListener('suspend', showLoader);
+      video.addEventListener('emptied', showLoader);
+
+      // если вкладка вернулась в фокус — попытаться продолжить
+      document.addEventListener('visibilitychange', ()=>{
+        if (!document.hidden && video.paused && !froze) {
+          userKick();
+        }
       });
 
-      // Ensure autoplay on iOS: attempt to play on user gesture if blocked
-      const tryPlay = ()=> video.play().catch(()=>{});
-      document.addEventListener('touchstart', tryPlay, {once:true, passive:true});
-      document.addEventListener('click', tryPlay, {once:true});
-
-      // When playback starts, schedule logo appearance
-      video.addEventListener('play', scheduleLogo, {once:true});
-
-      // Play once, then freeze on the last frame consistently across browsers
-      let froze = false;
+      /* ---------- freeze last frame ---------- */
       video.addEventListener('timeupdate', ()=>{
         if(froze) return;
         const nearEnd = video.duration && (video.currentTime >= video.duration - 0.06);
-        if(nearEnd){
-          freezeLastFrame();
-          froze = true;
-        }
+        if(nearEnd){ freezeLastFrame(); froze = true; }
       });
-      video.addEventListener('ended', ()=>{
-        if(!froze) freezeLastFrame();
-      });
+      video.addEventListener('ended', ()=>{ if(!froze) { freezeLastFrame(); froze = true; } });
 
       function freezeLastFrame(){
         try{
@@ -152,13 +199,11 @@
           const ctx = freezeCanvas.getContext('2d');
           ctx.drawImage(video, 0, 0, w, h);
           freezeCanvas.style.display = 'block';
-          // Stop the video and show the captured bitmap to keep the visual last frame
           video.pause();
-          // Keep current frame visible beneath canvas
-        }catch(e){/* ignore drawing errors */}
+        }catch(e){}
       }
 
-      // Logo click: fade it out, show reveal image + text
+      /* ---------- reveal & back ---------- */
       logo.addEventListener('click', ()=>{
         if(interacted) return; interacted = true;
         logo.classList.add('fading');
@@ -167,10 +212,23 @@
         cta.classList.add('visible');
       });
 
-      // Resize canvas to fit element size when window resizes (keeps coverage)
+      function resetToStart(){
+        reveal.classList.remove('visible');
+        cta.classList.remove('visible');
+        logo.style.display = '';
+        logo.classList.remove('fading');
+        requestAnimationFrame(()=> logo.classList.add('visible'));
+        interacted = false;
+
+        // остаёмся на замороженном последнем кадре; если нужно — можно перезапускать видео:
+        // froze = false; freezeCanvas.style.display = 'none'; video.currentTime = 0; ensurePlayback(); logoShown = false;
+      }
+      reveal.addEventListener('click', resetToStart);
+      document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') resetToStart(); });
+
+      /* ---------- responsive redraw of canvas ---------- */
       window.addEventListener('resize', ()=>{
         if(freezeCanvas.style.display === 'block'){
-          // Re-draw last known frame scaled to new size
           try{
             const w = video.videoWidth || window.innerWidth;
             const h = video.videoHeight || window.innerHeight;
