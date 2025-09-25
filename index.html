@@ -17,13 +17,13 @@
 
     .stage{position:fixed;inset:0;overflow:hidden;}
 
-    /* Loader */
+    /* Loader (только до первого старта) */
     .loader{position:absolute;inset:0;display:grid;place-items:center;background:#000;z-index:60;transition:opacity var(--fade-duration) ease;}
     .loader.hidden{opacity:0;pointer-events:none}
     .spinner{width:56px;height:56px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Tap-to-play overlay if autoplay is blocked */
+    /* Tap-to-play (если автоплей заблокирован) */
     .tap{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6);z-index:70}
     .tap.visible{display:grid}
     .tap-btn{cursor:pointer;border:1px solid rgba(255,255,255,.6);padding:12px 18px;border-radius:12px;background:rgba(0,0,0,.35)}
@@ -61,7 +61,7 @@
       <div class="spinner" role="status" aria-label="Загрузка"></div>
     </div>
 
-    <!-- Tap-to-play (autoplay fallback) -->
+    <!-- Tap-to-play (если автоплей заблокирован) -->
     <div class="tap" id="tap">
       <div class="tap-btn" id="tapBtn">Нажмите, чтобы запустить видео</div>
     </div>
@@ -74,7 +74,7 @@
       playsinline
       muted
       autoplay
-      poster="poster.jpg"  <!-- добавь постер, чтобы не было чёрного кадра -->
+      poster="poster.jpg"
     >
       <source src="back1.mp4" type="video/mp4" />
       <!-- <source src="back1.webm" type="video/webm" /> -->
@@ -114,10 +114,11 @@
       let logoShown = false;
       let interacted = false;
       let froze = false;
-      let autoplayChecked = false;
+      let hasStarted = false; // <- после старта спиннер больше не показываем
 
       /* ---------- helpers ---------- */
-      const showLoader = () => loader.classList.remove('hidden');
+      // Показ спиннера только пока не стартовало
+      const showLoader = () => { if(!hasStarted) loader.classList.remove('hidden'); };
       const hideLoader = () => loader.classList.add('hidden');
 
       function scheduleLogo(){
@@ -136,50 +137,64 @@
         return Number.isFinite(ms) ? ms : 5500;
       }
 
+      // Маркируем, что воспроизведение реально пошло
+      function markStarted(){
+        if (hasStarted) return;
+        if (video.currentTime <= 0.02) return; // убедимся, что тайм реально двинулся
+        hasStarted = true;
+        hideLoader();
+        tap.classList.remove('visible');
+        scheduleLogo();
+        // На всякий случай уберём любые обработчики, которые могли бы снова показать лоадер
+        ['waiting','stalled','suspend','emptied'].forEach(ev=>{
+          video.removeEventListener(ev, showLoader);
+        });
+      }
+
       /* ---------- autoplay attempt ---------- */
       async function ensurePlayback(){
         showLoader();
         try {
           await video.play();
-          // удачно — ждём реального старта (playing)
         } catch(e){
-          // автоплей заблокирован — покажем тап-оверлей
+          // автоплей заблокирован — даём тап
           tap.classList.add('visible');
-        } finally {
-          autoplayChecked = true;
         }
       }
 
-      // Первая попытка как можно раньше
+      // Ранний старт
       if (document.readyState === 'complete' || document.readyState === 'interactive') {
         ensurePlayback();
       } else {
         window.addEventListener('DOMContentLoaded', ensurePlayback, {once:true});
       }
 
-      // Доп. попытка при первом взаимодействии пользователя
+      // Пользовательский «пинок»
       const userKick = async ()=>{
-        if (!autoplayChecked || tap.classList.contains('visible')) {
-          showLoader();
-          try{ await video.play(); tap.classList.remove('visible'); }catch(e){}
-        }
+        if (hasStarted) return; // уже идёт — не трогаем
+        showLoader();
+        try{ await video.play(); }catch(e){}
       };
+      tapBtn.addEventListener('click', userKick);
+      // На всякий случай – первый клик/тач/клавиша
       ['click','touchstart','keydown'].forEach(ev=>{
         document.addEventListener(ev, userKick, {once:true, passive:true});
       });
-      tapBtn.addEventListener('click', userKick);
 
-      /* ---------- loader logic: hide only on real playback ---------- */
-      video.addEventListener('playing', ()=>{ hideLoader(); scheduleLogo(); }, {once:false});
-      video.addEventListener('waiting', showLoader);
-      video.addEventListener('stalled', showLoader);
-      video.addEventListener('suspend', showLoader);
-      video.addEventListener('emptied', showLoader);
+      /* ---------- прячем лоадер ТОЛЬКО на первом реальном старте ---------- */
+      video.addEventListener('playing', markStarted);      // когда декодер реально начал
+      video.addEventListener('timeupdate', markStarted);   // страховка для некоторых браузеров
 
-      // если вкладка вернулась в фокус — попытаться продолжить
+      // ВАЖНО: больше не показываем лоадер после старта — поэтому закомментировано:
+      // video.addEventListener('waiting', showLoader);
+      // video.addEventListener('stalled', showLoader);
+      // video.addEventListener('suspend', showLoader);
+      // video.addEventListener('emptied', showLoader);
+
+      // Если вкладка вернулась – не трогаем лоадер, просто пытаемся продолжить
       document.addEventListener('visibilitychange', ()=>{
         if (!document.hidden && video.paused && !froze) {
-          userKick();
+          video.play().catch(()=>{});
         }
       });
 
@@ -219,9 +234,8 @@
         logo.classList.remove('fading');
         requestAnimationFrame(()=> logo.classList.add('visible'));
         interacted = false;
-
-        // остаёмся на замороженном последнем кадре; если нужно — можно перезапускать видео:
-        // froze = false; freezeCanvas.style.display = 'none'; video.currentTime = 0; ensurePlayback(); logoShown = false;
+        // остаёмся на замороженном последнем кадре; при желании можно перезапускать видео:
+        // froze = false; freezeCanvas.style.display = 'none'; video.currentTime = 0; ensurePlayback(); logoShown = false; hasStarted = false; showLoader();
       }
       reveal.addEventListener('click', resetToStart);
       document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') resetToStart(); });
