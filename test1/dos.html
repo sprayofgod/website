@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SunRay | Моментальный загар</title>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            overflow-x: hidden;
+            color: #333;
+        }
+
+        /* Секция Героя с анимированным градиентом */
+        .hero {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(-45deg, #ffd89b, #ff9d6c, #f5c0c0, #9be6ff);
+            background-size: 400% 400%;
+            animation: gradientShift 10s ease infinite;
+            color: white;
+            position: relative;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 1s ease 0.5s forwards;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .hero p {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 1s ease 0.8s forwards;
+        }
+
+        .cta-button {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            border: 2px solid white;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 1s ease 1.1s forwards;
+            text-decoration: none;
+        }
+
+        .cta-button:hover {
+            background: white;
+            color: #ff9d6c;
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Секция "Почему мы?" с анимацией при скролле */
+        .features {
+            padding: 100px 20px;
+            background-color: #fffaf5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 80px;
+            opacity: 0;
+            transform: translateX(-100px);
+            transition: all 0.8s ease;
+        }
+        .feature-item:nth-child(even) {
+            flex-direction: row-reverse;
+            transform: translateX(100px);
+        }
+
+        .feature-item.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .feature-img {
+            flex: 1;
+            height: 300px;
+            background-color: #ff9d6c;
+            border-radius: 10px;
+            /* Замените background-color на background-image с вашей картинкой */
+            background-size: cover;
+            background-position: center;
+        }
+
+        .feature-text {
+            flex: 1;
+            padding: 40px;
+        }
+
+        .feature-text h3 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #e67e22;
+        }
+
+        /* Секция с интерактивным загаром */
+        .interactive {
+            padding: 100px 20px;
+            background: linear-gradient(to bottom, #fffaf5, #ffecd2);
+            text-align: center;
+        }
+
+        .skin-demo {
+            width: 200px;
+            height: 200px;
+            background-color: #fdf6e3; /* Светлый тон кожи */
+            border-radius: 50%;
+            margin: 40px auto;
+            cursor: pointer;
+            transition: background-color 1.5s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .skin-demo:hover {
+            background-color: #e6b89c; /* Загорелый тон кожи */
+        }
+
+        /* Футер */
+        footer {
+            padding: 50px 20px;
+            background-color: #333;
+            color: white;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Секция Героя -->
+    <section class="hero">
+        <h1>Моментальный загар</h1>
+        <p>Идеальный оттенок всего за 60 минут. Безопасно и естественно.</p>
+        <a href="#form" class="cta-button">Записаться онлайн</a>
+    </section>
+
+    <!-- Секция Преимуществ -->
+    <section class="features">
+        <div class="container">
+            <div class="feature-item">
+                <div class="feature-img" style="background-image: url('https://placehold.co/600x400/ff9d6c/white?text=Натуральный+оттенок');"></div>
+                <div class="feature-text">
+                    <h3>Естественный результат</h3>
+                    <p>Наша формула подстраивается под ваш естественный тон кожи, создавая идеально натуральный загар без полос и оранжевого отлива.</p>
+                </div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-img" style="background-image: url('https://placehold.co/600x400/f5c0c0/white?text=Безопасно');"></div>
+                <div class="feature-text">
+                    <h3>Безопасно для кожи</h3>
+                    <p>Мы используем только органические компоненты, которые не вредят коже и подходят даже для самого чувствительного типа.</p>
+                </div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-img" style="background-image: url('https://placehold.co/600x400/9be6ff/white?text=Долго+держится');"></div>
+                <div class="feature-text">
+                    <h3>Держится до 10 дней</h3>
+                    <p>Специальная технология нанесения позволяет загару держаться значительно дольше, чем у стандартных средств.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Интерактивная секция -->
+    <section class="interactive">
+        <div class="container">
+            <h2>Почувствуй разницу</h2>
+            <p>Наведи курсор на круг, чтобы увидеть эффект</p>
+            <div class="skin-demo" id="skinDemo"></div>
+        </div>
+    </section>
+
+    <!-- Футер -->
+    <footer>
+        <div class="container">
+            <p>© 2023 SunRay. Моментальный загар премиум-класса.</p>
+        </div>
+    </footer>
+
+    <script>
+        $(document).ready(function() {
+
+            // Анимация появления элементов при скролле
+            function checkVisibility() {
+                $('.feature-item').each(function() {
+                    var element = $(this);
+                    var position = element.offset().top;
+                    var scrollPosition = $(window).scrollTop() + $(window).height();
+
+                    if (scrollPosition > position + 100) {
+                        element.addClass('visible');
+                    }
+                });
+            }
+
+            // Проверяем при загрузке и при скролле
+            checkVisibility();
+            $(window).scroll(function() {
+                checkVisibility();
+            });
+
+            // Небольшой эффект параллакса для героя
+            $(window).scroll(function() {
+                var scrolled = $(window).scrollTop();
+                $('.hero').css('background-position-y', -(scrolled * 0.5) + 'px');
+            });
+
+            // Усложним интерактивный элемент: пусть загар зависит от положения курсора
+            $('#skinDemo').on('mousemove', function(e) {
+                var $this = $(this);
+                var offset = $this.offset();
+                var x = e.pageX - offset.left;
+                var y = e.pageY - offset.top;
+
+                // Чем ближе к центру, тем темнее загар
+                var centerX = $this.width() / 2;
+                var centerY = $this.height() / 2;
+
+                var distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                var maxDistance = Math.sqrt(Math.pow(centerX, 2) + Math.pow(centerY, 2));
+
+                // Интенсивность загара от 0 до 1
+                var intensity = 1 - (distance / maxDistance);
+
+                // Базовые цвета: светлый тон кожи и загорелый
+                var baseColor = [253, 246, 227]; // #fdf6e3 в RGB
+                var tanColor = [179, 130, 102];  // #b38266 в RGB
+
+                // Смешиваем цвета в зависимости от интенсивности
+                var r = Math.round(baseColor[0] + (tanColor[0] - baseColor[0]) * intensity);
+                var g = Math.round(baseColor[1] + (tanColor[1] - baseColor[1]) * intensity);
+                var b = Math.round(baseColor[2] + (tanColor[2] - baseColor[2]) * intensity);
+
+                $this.css('background-color', 'rgb(' + r + ',' + g + ',' + b + ')');
+            });
+
+            // Возвращаем исходный цвет, когда курсор убираем
+            $('#skinDemo').on('mouseleave', function() {
+                $(this).css('background-color', '#fdf6e3');
+            });
+
+        });
+    </script>
+</body>
+</html>
