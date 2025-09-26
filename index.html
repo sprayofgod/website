@@ -6,13 +6,18 @@
   <title>Spray of God</title>
   <style>
     :root{
-      --reveal-delay: 5500ms;
+      --reveal-delay: 5500ms; /* 5–7 c */
       --fade-duration: 700ms;
       --text-bg: rgba(0,0,0,.55);
     }
+
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans",sans-serif;background:#000;color:#fff;overflow:hidden}
+    body{
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+      background:#000;color:#fff;overflow:hidden
+    }
+
     .stage{position:fixed;inset:0;overflow:hidden}
 
     /* Loader */
@@ -20,6 +25,12 @@
     .loader.hidden{opacity:0;pointer-events:none}
     .spinner{width:56px;height:56px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Tap-to-play (если автоплей заблокирован) */
+    .tap{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6);z-index:70}
+    .tap.visible{display:grid}
+    .tap-btn{cursor:pointer;border:1px solid rgba(255,255,255,.6);padding:12px 18px;border-radius:12px;background:rgba(0,0,0,.35)}
+    .tap-btn:active{transform:scale(.98)}
 
     /* YouTube bg */
     .ytbg{position:absolute;inset:0;overflow:hidden;background:#000}
@@ -31,7 +42,7 @@
     .logo img{width:50%;height:auto;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55));cursor:pointer}
     .logo.fading{opacity:0;transform:scale(.96)}
 
-    /* Reveal */
+    /* Reveal image */
     .reveal{position:absolute;inset:0;background:#000 center/cover no-repeat;opacity:0;transition:opacity var(--fade-duration) ease;z-index:10;cursor:pointer}
     .reveal.visible{opacity:1}
 
@@ -40,27 +51,33 @@
     .cta-inner{max-width:min(92ch,96vw);background:var(--text-bg);backdrop-filter:saturate(120%) blur(6px);padding:14px 18px;border-radius:12px;line-height:1.35;transform:translateY(12px);opacity:0;transition:transform var(--fade-duration) ease,opacity var(--fade-duration) ease}
     .cta.visible .cta-inner{opacity:1;transform:translateY(0)}
 
-    /* Скрываем любые клики поверх кадра на случай UI YouTube */
-    .freeze-shield{position:absolute;inset:0;z-index:15;pointer-events:none}
+    @media (prefers-reduced-motion: reduce){
+      .spinner{animation:none}
+      .logo,.reveal,.loader,.cta-inner{transition:none}
+    }
   </style>
 </head>
 <body>
   <div class="stage">
     <!-- Loader -->
-    <div class="loader" id="loader">
-      <div class="spinner"></div>
+    <div class="loader" id="loader" aria-live="polite" aria-busy="true">
+      <div class="spinner" role="status" aria-label="Загрузка"></div>
+    </div>
+
+    <!-- Tap-to-play -->
+    <div class="tap" id="tap">
+      <div class="tap-btn" id="tapBtn">Нажмите, чтобы запустить видео</div>
     </div>
 
     <!-- YouTube background -->
     <div class="ytbg" id="ytbg"></div>
-    <div class="freeze-shield" id="shield"></div>
 
-    <!-- Logo -->
-    <div class="logo" id="logo">
-      <img src="logo_trans.png" alt="Логотип" />
+    <!-- Center logo -->
+    <div class="logo" id="logo" aria-hidden="true">
+      <img src="logo_trans.png" alt="Логотип" id="logoImg" />
     </div>
 
-    <!-- Reveal -->
+    <!-- Reveal image -->
     <div class="reveal" id="reveal" style="background-image:url('flow.png')"></div>
 
     <!-- Bottom text -->
@@ -70,133 +87,174 @@
     </div></div>
   </div>
 
-  <!-- YouTube API -->
+  <!-- YouTube IFrame API -->
   <script>
-    const YT_ID = "zBBDpBXRd6I"; // видео
-
+    // Конфиг
+    const YT_VIDEO_URL = "https://www.youtube.com/watch?v=zBBDpBXRd6I";
+    const YT_ID = (()=>{
+      const m = YT_VIDEO_URL.match(/[?&]v=([^&]+)/) || YT_VIDEO_URL.match(/youtu\.be\/([^?]+)/);
+      return m ? m[1] : "zBBDpBXRd6I";
+    })();
+  </script>
+  <script>
     (function(){
       const loader = document.getElementById('loader');
+      const tap = document.getElementById('tap');
+      const tapBtn = document.getElementById('tapBtn');
       const logo = document.getElementById('logo');
       const reveal = document.getElementById('reveal');
       const cta = document.getElementById('cta');
       const ytbg = document.getElementById('ytbg');
-      const shield = document.getElementById('shield');
 
-      let logoTimer=null, logoShown=false, interacted=false, hasStarted=false, player=null, watchTimer=null, frozen=false;
+      let logoTimer = null;
+      let logoShown = false;
+      let interacted = false;
+      let hasStarted = false;
+      let player = null;
 
-      const showLoader = ()=>{ if(!hasStarted) loader.classList.remove('hidden'); };
-      const hideLoader = ()=> loader.classList.add('hidden');
-      const scheduleLogo = ()=>{
+      /* ---------- helpers ---------- */
+      const showLoader = () => { if(!hasStarted) loader.classList.remove('hidden'); };
+      const hideLoader = () => loader.classList.add('hidden');
+
+      function scheduleLogo(){
         if(logoShown) return;
         clearTimeout(logoTimer);
-        logoTimer=setTimeout(()=>{logo.classList.add('visible');logoShown=true;},5500);
-      };
+        logoTimer = setTimeout(()=>{
+          logo.classList.add('visible');
+          logoShown = true;
+        }, getDelay());
+      }
+      function getDelay(){
+        const val = getComputedStyle(document.documentElement).getPropertyValue('--reveal-delay').trim();
+        const ms = parseInt(val); return Number.isFinite(ms) ? ms : 5500;
+      }
 
+      /* ---------- YouTube IFrame API bootstrap ---------- */
       function loadYTApi(){
-        return new Promise(resolve=>{
-          if(window.YT&&window.YT.Player) return resolve();
-          const tag=document.createElement('script');
-          tag.src="https://www.youtube.com/iframe_api";
+        return new Promise((resolve)=>{
+          if (window.YT && window.YT.Player) return resolve();
+          const tag = document.createElement('script');
+          tag.src = "https://www.youtube.com/iframe_api";
           document.head.appendChild(tag);
-          window.onYouTubeIframeAPIReady=()=>resolve();
+          window.onYouTubeIframeAPIReady = ()=> resolve();
         });
       }
 
       function createPlayer(){
-        const holder=document.createElement('div');holder.id='yt-holder';ytbg.appendChild(holder);
-        player=new YT.Player(holder,{
-          videoId:YT_ID,
-          playerVars:{
-            autoplay:1,
-            controls:0,
-            disablekb:1,
-            fs:0,
-            modestbranding:1,
-            rel:0,
-            playsinline:1,
-            mute:1,
-            // Без loop – один прогон
-            iv_load_policy:3,
+        // Контейнер для iframe
+        const holder = document.createElement('div');
+        holder.id = 'yt-holder';
+        ytbg.appendChild(holder);
+
+        player = new YT.Player(holder, {
+          videoId: YT_ID,
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            modestbranding: 1,
+            rel: 0,
+            playsinline: 1,
+            mute: 1,            // автоплей разрешён только без звука
+            loop: 1,
+            playlist: YT_ID,    // нужно для loop
+            iv_load_policy: 3,
             origin: location.origin
           },
-          events:{onReady:onPlayerReady,onStateChange:onStateChange}
+          events: {
+            onReady: onPlayerReady,
+            onStateChange: onPlayerStateChange,
+            onError: onPlayerError
+          }
         });
       }
 
       function onPlayerReady(){
         sizeIframe();
-        window.addEventListener('resize',sizeIframe);
+        window.addEventListener('resize', sizeIframe);
         showLoader();
-        try{ player.playVideo(); }catch(e){}
+        try { player.playVideo(); } catch(e) { /* ждём onStateChange */ }
       }
 
-      function onStateChange(e){
-        const PS = YT.PlayerState;
-        if(e.data===PS.PLAYING){
+      function onPlayerStateChange(ev){
+        const YTP = window.YT?.PlayerState || {};
+        if (ev.data === YTP.PLAYING){
           markStarted();
-          startFreezeWatch();
-        } else if(e.data===PS.ENDED){
-          // На всякий – если дошли до ENDED, сразу откатываемся на последний кадр
-          freezeToLastFrame();
+        } else if (ev.data === YTP.UNSTARTED){
+          // Нередко автоплей блокируется до первого взаимодействия
+          tap.classList.add('visible');
+        } else if (ev.data === YTP.ENDED){
+          // Зациклено, но на случай разрывов ─ пробуем перезапуск
+          try { player.playVideo(); } catch(e){}
         }
       }
 
+      function onPlayerError(){
+        // Дадим пользователю шанс вручную запустить
+        tap.classList.add('visible');
+      }
+
       function markStarted(){
-        if(hasStarted) return;
-        hasStarted=true;
+        if (hasStarted) return;
+        hasStarted = true;
         hideLoader();
+        tap.classList.remove('visible');
         scheduleLogo();
       }
 
-      function startFreezeWatch(){
-        clearInterval(watchTimer);
-        watchTimer=setInterval(()=>{
-          if(!player || frozen) return;
-          const dur = player.getDuration ? player.getDuration() : 0;
-          const cur = player.getCurrentTime ? player.getCurrentTime() : 0;
-          if(dur>0 && cur >= dur - 0.06){
-            freezeToLastFrame();
-          }
-        }, 80);
-      }
-
-      function freezeToLastFrame(){
-        if(frozen || !player) return;
+      // Обработка пользовательского «пинка» для автоплея
+      async function userKick(){
+        if (!player) return;
+        showLoader();
         try{
-          const dur = player.getDuration();
-          // Перемещаемся за мгновение до конца и пауза – кадр остаётся на экране
-          if(dur>0) player.seekTo(Math.max(dur - 0.06, 0), true);
-          player.pauseVideo();
-          frozen = true;
-          clearInterval(watchTimer);
-          // Щит поверх – чтобы не всплыл ютубовский UI при окончании
-          shield.style.pointerEvents = 'auto';
+          if (typeof player.isMuted === 'function' && !player.isMuted()) player.mute();
+          player.playVideo();
         }catch(e){}
       }
-
-      function sizeIframe(){
-        const iframe=ytbg.querySelector('iframe');if(!iframe) return;
-        const W=window.innerWidth,H=window.innerHeight,ratio=16/9;
-        let w=W,h=W/ratio;if(h<H){h=H;w=H*ratio;}
-        iframe.style.width=w+"px";iframe.style.height=h+"px";
-      }
-
-      // Reveal/back
-      logo.addEventListener('click',()=>{
-        if(interacted) return;interacted=true;
-        logo.classList.add('fading');
-        setTimeout(()=>{logo.style.display='none';},700);
-        reveal.classList.add('visible');cta.classList.add('visible');
+      tapBtn.addEventListener('click', userKick);
+      ['click','touchstart','keydown'].forEach(ev=>{
+        document.addEventListener(ev, userKick, {once:true, passive:true});
       });
-      function reset(){
-        reveal.classList.remove('visible');cta.classList.remove('visible');
-        logo.style.display='';logo.classList.remove('fading');
-        requestAnimationFrame(()=>logo.classList.add('visible'));interacted=false;
-      }
-      reveal.addEventListener('click',reset);
-      document.addEventListener('keydown',e=>{if(e.key==='Escape') reset();});
 
-      (async function init(){showLoader();await loadYTApi();createPlayer();})();
+      // Подгоняем iframe под cover
+      function sizeIframe(){
+        if (!player) return;
+        const iframe = ytbg.querySelector('iframe');
+        if(!iframe) return;
+        const W = window.innerWidth, H = window.innerHeight;
+        const vidRatio = 16/9;
+        let w = W, h = W/vidRatio;
+        if (h < H){ h = H; w = H*vidRatio; }
+        iframe.style.width = w + 'px';
+        iframe.style.height = h + 'px';
+      }
+
+      /* ---------- reveal & back ---------- */
+      logo.addEventListener('click', ()=>{
+        if(interacted) return; interacted = true;
+        logo.classList.add('fading');
+        setTimeout(()=>{ logo.style.display = 'none'; }, 700);
+        reveal.classList.add('visible');
+        cta.classList.add('visible');
+      });
+      function resetToStart(){
+        reveal.classList.remove('visible');
+        cta.classList.remove('visible');
+        logo.style.display = '';
+        logo.classList.remove('fading');
+        requestAnimationFrame(()=> logo.classList.add('visible'));
+        interacted = false;
+      }
+      reveal.addEventListener('click', resetToStart);
+      document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') resetToStart(); });
+
+      /* ---------- init ---------- */
+      (async function init(){
+        showLoader();
+        await loadYTApi();
+        createPlayer();
+      })();
     })();
   </script>
 </body>
