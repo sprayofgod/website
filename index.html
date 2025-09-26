@@ -13,33 +13,30 @@
 
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
-      background:#000;color:#fff;overflow:hidden
-    }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans",sans-serif;background:#000;color:#fff;overflow:hidden}
 
-    .stage{position:fixed;inset:0;overflow:hidden}
+    .stage{position:fixed;inset:0;overflow:hidden;}
 
     /* Loader */
-    .loader{position:absolute;inset:0;display:grid;place-items:center;background:#000;z-index:60;transition:opacity var(--fade-duration) ease}
+    .loader{position:absolute;inset:0;display:grid;place-items:center;background:#000;z-index:60;transition:opacity var(--fade-duration) ease;}
     .loader.hidden{opacity:0;pointer-events:none}
     .spinner{width:56px;height:56px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Tap-to-play (если автоплей заблокирован) */
+    /* Tap-to-play overlay if autoplay is blocked */
     .tap{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6);z-index:70}
     .tap.visible{display:grid}
     .tap-btn{cursor:pointer;border:1px solid rgba(255,255,255,.6);padding:12px 18px;border-radius:12px;background:rgba(0,0,0,.35)}
     .tap-btn:active{transform:scale(.98)}
 
-    /* YouTube bg */
-    .ytbg{position:absolute;inset:0;overflow:hidden;background:#000}
-    .ytbg iframe{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+    /* Video + freeze */
+    .bg-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;background:#000;}
+    canvas.freeze{position:absolute;inset:0;width:100%;height:100%;display:none}
 
     /* Logo */
-    .logo{position:absolute;inset:0;display:grid;place-items:center;z-index:20;opacity:0;pointer-events:none;transition:opacity var(--fade-duration) ease,transform var(--fade-duration) ease}
+    .logo{position:absolute;inset:0;display:grid;place-items:center;z-index:20;opacity:0;pointer-events:none;transition:opacity var(--fade-duration) ease,transform var(--fade-duration) ease;}
     .logo.visible{opacity:1;pointer-events:auto}
-    .logo img{width:50%;height:auto;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55));cursor:pointer}
+    .logo img{width:50%;height:auto;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.55));cursor:pointer;}
     .logo.fading{opacity:0;transform:scale(.96)}
 
     /* Reveal image */
@@ -47,7 +44,7 @@
     .reveal.visible{opacity:1}
 
     /* Bottom text */
-    .cta{position:absolute;left:0;right:0;bottom:0;padding:20px clamp(16px,4vw,40px);z-index:30;display:flex;justify-content:center}
+    .cta{position:absolute;left:0;right:0;bottom:0;padding:20px clamp(16px,4vw,40px);z-index:30;display:flex;justify-content:center;}
     .cta-inner{max-width:min(92ch,96vw);background:var(--text-bg);backdrop-filter:saturate(120%) blur(6px);padding:14px 18px;border-radius:12px;line-height:1.35;transform:translateY(12px);opacity:0;transition:transform var(--fade-duration) ease,opacity var(--fade-duration) ease}
     .cta.visible .cta-inner{opacity:1;transform:translateY(0)}
 
@@ -64,13 +61,28 @@
       <div class="spinner" role="status" aria-label="Загрузка"></div>
     </div>
 
-    <!-- Tap-to-play -->
+    <!-- Tap-to-play (autoplay fallback) -->
     <div class="tap" id="tap">
       <div class="tap-btn" id="tapBtn">Нажмите, чтобы запустить видео</div>
     </div>
 
-    <!-- YouTube background -->
-    <div class="ytbg" id="ytbg"></div>
+    <!-- Background video -->
+    <video
+      id="heroVideo"
+      class="bg-video"
+      preload="auto"
+      playsinline
+      muted
+      autoplay
+      poster="poster.jpg"  <!-- добавь постер, чтобы не было чёрного кадра -->
+    >
+      <source src="back1.mp4" type="video/mp4" />
+      <!-- <source src="back1.webm" type="video/webm" /> -->
+      Ваш браузер не поддерживает видео тег.
+    </video>
+
+    <!-- Freeze-frame canvas -->
+    <canvas id="freezeCanvas" class="freeze"></canvas>
 
     <!-- Center logo -->
     <div class="logo" id="logo" aria-hidden="true">
@@ -83,37 +95,29 @@
     <!-- Bottom text -->
     <div class="cta" id="cta"><div class="cta-inner">
       <strong>Дорогая Диана</strong><br/>
-      Я очень сильно тебя люблю и всецело верю в тебя и все твои начинания! Я хочу, чтобы тебе сопутствовала удача, и я стараюсь и буду стараться тебе как-то облегчить нагрузку, потому что ощущаю свою причастность и большое желание тебе помогать чем могу и как умею!))
+      Я очень сильно тебя люблю и всецело верю в тебя и все твои начинания! Я хочу чтобы тебе сопутствовала удача и я стараюсь и буду стараться тебе как-то облегчить нагрузку, потому что ощущаю свою причастность и большое желание тебе помогать чем могу и как умею!))
     </div></div>
   </div>
 
-  <!-- YouTube IFrame API -->
-  <script>
-    // Конфиг
-    const YT_VIDEO_URL = "https://www.youtube.com/watch?v=zBBDpBXRd6I";
-    const YT_ID = (()=>{
-      const m = YT_VIDEO_URL.match(/[?&]v=([^&]+)/) || YT_VIDEO_URL.match(/youtu\.be\/([^?]+)/);
-      return m ? m[1] : "zBBDpBXRd6I";
-    })();
-  </script>
   <script>
     (function(){
+      const video = document.getElementById('heroVideo');
       const loader = document.getElementById('loader');
       const tap = document.getElementById('tap');
       const tapBtn = document.getElementById('tapBtn');
       const logo = document.getElementById('logo');
       const reveal = document.getElementById('reveal');
       const cta = document.getElementById('cta');
-      const ytbg = document.getElementById('ytbg');
+      const freezeCanvas = document.getElementById('freezeCanvas');
 
       let logoTimer = null;
       let logoShown = false;
       let interacted = false;
-      let hasStarted = false;
-      let player = null;
+      let froze = false;
+      let autoplayChecked = false;
 
       /* ---------- helpers ---------- */
-      const showLoader = () => { if(!hasStarted) loader.classList.remove('hidden'); };
+      const showLoader = () => loader.classList.remove('hidden');
       const hideLoader = () => loader.classList.add('hidden');
 
       function scheduleLogo(){
@@ -124,110 +128,79 @@
           logoShown = true;
         }, getDelay());
       }
+
       function getDelay(){
-        const val = getComputedStyle(document.documentElement).getPropertyValue('--reveal-delay').trim();
-        const ms = parseInt(val); return Number.isFinite(ms) ? ms : 5500;
+        const styles = getComputedStyle(document.documentElement);
+        const val = styles.getPropertyValue('--reveal-delay').trim();
+        const ms = parseInt(val);
+        return Number.isFinite(ms) ? ms : 5500;
       }
 
-      /* ---------- YouTube IFrame API bootstrap ---------- */
-      function loadYTApi(){
-        return new Promise((resolve)=>{
-          if (window.YT && window.YT.Player) return resolve();
-          const tag = document.createElement('script');
-          tag.src = "https://www.youtube.com/iframe_api";
-          document.head.appendChild(tag);
-          window.onYouTubeIframeAPIReady = ()=> resolve();
-        });
-      }
-
-      function createPlayer(){
-        // Контейнер для iframe
-        const holder = document.createElement('div');
-        holder.id = 'yt-holder';
-        ytbg.appendChild(holder);
-
-        player = new YT.Player(holder, {
-          videoId: YT_ID,
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
-            modestbranding: 1,
-            rel: 0,
-            playsinline: 1,
-            mute: 1,            // автоплей разрешён только без звука
-            loop: 1,
-            playlist: YT_ID,    // нужно для loop
-            iv_load_policy: 3,
-            origin: location.origin
-          },
-          events: {
-            onReady: onPlayerReady,
-            onStateChange: onPlayerStateChange,
-            onError: onPlayerError
-          }
-        });
-      }
-
-      function onPlayerReady(){
-        sizeIframe();
-        window.addEventListener('resize', sizeIframe);
+      /* ---------- autoplay attempt ---------- */
+      async function ensurePlayback(){
         showLoader();
-        try { player.playVideo(); } catch(e) { /* ждём onStateChange */ }
-      }
-
-      function onPlayerStateChange(ev){
-        const YTP = window.YT?.PlayerState || {};
-        if (ev.data === YTP.PLAYING){
-          markStarted();
-        } else if (ev.data === YTP.UNSTARTED){
-          // Нередко автоплей блокируется до первого взаимодействия
+        try {
+          await video.play();
+          // удачно — ждём реального старта (playing)
+        } catch(e){
+          // автоплей заблокирован — покажем тап-оверлей
           tap.classList.add('visible');
-        } else if (ev.data === YTP.ENDED){
-          // Зациклено, но на случай разрывов ─ пробуем перезапуск
-          try { player.playVideo(); } catch(e){}
+        } finally {
+          autoplayChecked = true;
         }
       }
 
-      function onPlayerError(){
-        // Дадим пользователю шанс вручную запустить
-        tap.classList.add('visible');
+      // Первая попытка как можно раньше
+      if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        ensurePlayback();
+      } else {
+        window.addEventListener('DOMContentLoaded', ensurePlayback, {once:true});
       }
 
-      function markStarted(){
-        if (hasStarted) return;
-        hasStarted = true;
-        hideLoader();
-        tap.classList.remove('visible');
-        scheduleLogo();
-      }
-
-      // Обработка пользовательского «пинка» для автоплея
-      async function userKick(){
-        if (!player) return;
-        showLoader();
-        try{
-          if (typeof player.isMuted === 'function' && !player.isMuted()) player.mute();
-          player.playVideo();
-        }catch(e){}
-      }
-      tapBtn.addEventListener('click', userKick);
+      // Доп. попытка при первом взаимодействии пользователя
+      const userKick = async ()=>{
+        if (!autoplayChecked || tap.classList.contains('visible')) {
+          showLoader();
+          try{ await video.play(); tap.classList.remove('visible'); }catch(e){}
+        }
+      };
       ['click','touchstart','keydown'].forEach(ev=>{
         document.addEventListener(ev, userKick, {once:true, passive:true});
       });
+      tapBtn.addEventListener('click', userKick);
 
-      // Подгоняем iframe под cover
-      function sizeIframe(){
-        if (!player) return;
-        const iframe = ytbg.querySelector('iframe');
-        if(!iframe) return;
-        const W = window.innerWidth, H = window.innerHeight;
-        const vidRatio = 16/9;
-        let w = W, h = W/vidRatio;
-        if (h < H){ h = H; w = H*vidRatio; }
-        iframe.style.width = w + 'px';
-        iframe.style.height = h + 'px';
+      /* ---------- loader logic: hide only on real playback ---------- */
+      video.addEventListener('playing', ()=>{ hideLoader(); scheduleLogo(); }, {once:false});
+      video.addEventListener('waiting', showLoader);
+      video.addEventListener('stalled', showLoader);
+      video.addEventListener('suspend', showLoader);
+      video.addEventListener('emptied', showLoader);
+
+      // если вкладка вернулась в фокус — попытаться продолжить
+      document.addEventListener('visibilitychange', ()=>{
+        if (!document.hidden && video.paused && !froze) {
+          userKick();
+        }
+      });
+
+      /* ---------- freeze last frame ---------- */
+      video.addEventListener('timeupdate', ()=>{
+        if(froze) return;
+        const nearEnd = video.duration && (video.currentTime >= video.duration - 0.06);
+        if(nearEnd){ freezeLastFrame(); froze = true; }
+      });
+      video.addEventListener('ended', ()=>{ if(!froze) { freezeLastFrame(); froze = true; } });
+
+      function freezeLastFrame(){
+        try{
+          const w = video.videoWidth || window.innerWidth;
+          const h = video.videoHeight || window.innerHeight;
+          freezeCanvas.width = w; freezeCanvas.height = h;
+          const ctx = freezeCanvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, w, h);
+          freezeCanvas.style.display = 'block';
+          video.pause();
+        }catch(e){}
       }
 
       /* ---------- reveal & back ---------- */
@@ -238,6 +211,7 @@
         reveal.classList.add('visible');
         cta.classList.add('visible');
       });
+
       function resetToStart(){
         reveal.classList.remove('visible');
         cta.classList.remove('visible');
@@ -245,16 +219,25 @@
         logo.classList.remove('fading');
         requestAnimationFrame(()=> logo.classList.add('visible'));
         interacted = false;
+
+        // остаёмся на замороженном последнем кадре; если нужно — можно перезапускать видео:
+        // froze = false; freezeCanvas.style.display = 'none'; video.currentTime = 0; ensurePlayback(); logoShown = false;
       }
       reveal.addEventListener('click', resetToStart);
       document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') resetToStart(); });
 
-      /* ---------- init ---------- */
-      (async function init(){
-        showLoader();
-        await loadYTApi();
-        createPlayer();
-      })();
+      /* ---------- responsive redraw of canvas ---------- */
+      window.addEventListener('resize', ()=>{
+        if(freezeCanvas.style.display === 'block'){
+          try{
+            const w = video.videoWidth || window.innerWidth;
+            const h = video.videoHeight || window.innerHeight;
+            freezeCanvas.width = w; freezeCanvas.height = h;
+            const ctx = freezeCanvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, w, h);
+          }catch(e){}
+        }
+      });
     })();
   </script>
 </body>
