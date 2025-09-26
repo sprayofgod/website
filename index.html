@@ -10,11 +10,9 @@
       --fade-duration: 700ms;
       --text-bg: rgba(0,0,0,.55);
     }
-
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Helvetica Neue",Arial,"Noto Sans",sans-serif;background:#000;color:#fff;overflow:hidden}
-
     .stage{position:fixed;inset:0;overflow:hidden}
 
     /* Loader */
@@ -41,6 +39,9 @@
     .cta{position:absolute;left:0;right:0;bottom:0;padding:20px clamp(16px,4vw,40px);z-index:30;display:flex;justify-content:center}
     .cta-inner{max-width:min(92ch,96vw);background:var(--text-bg);backdrop-filter:saturate(120%) blur(6px);padding:14px 18px;border-radius:12px;line-height:1.35;transform:translateY(12px);opacity:0;transition:transform var(--fade-duration) ease,opacity var(--fade-duration) ease}
     .cta.visible .cta-inner{opacity:1;transform:translateY(0)}
+
+    /* Скрываем любые клики поверх кадра на случай UI YouTube */
+    .freeze-shield{position:absolute;inset:0;z-index:15;pointer-events:none}
   </style>
 </head>
 <body>
@@ -52,6 +53,7 @@
 
     <!-- YouTube background -->
     <div class="ytbg" id="ytbg"></div>
+    <div class="freeze-shield" id="shield"></div>
 
     <!-- Logo -->
     <div class="logo" id="logo">
@@ -70,7 +72,7 @@
 
   <!-- YouTube API -->
   <script>
-    const YT_ID = "zBBDpBXRd6I"; // твой id видео
+    const YT_ID = "zBBDpBXRd6I"; // видео
 
     (function(){
       const loader = document.getElementById('loader');
@@ -78,8 +80,9 @@
       const reveal = document.getElementById('reveal');
       const cta = document.getElementById('cta');
       const ytbg = document.getElementById('ytbg');
+      const shield = document.getElementById('shield');
 
-      let logoTimer=null, logoShown=false, interacted=false, hasStarted=false, player=null;
+      let logoTimer=null, logoShown=false, interacted=false, hasStarted=false, player=null, watchTimer=null, frozen=false;
 
       const showLoader = ()=>{ if(!hasStarted) loader.classList.remove('hidden'); };
       const hideLoader = ()=> loader.classList.add('hidden');
@@ -103,14 +106,73 @@
         const holder=document.createElement('div');holder.id='yt-holder';ytbg.appendChild(holder);
         player=new YT.Player(holder,{
           videoId:YT_ID,
-          playerVars:{autoplay:1,controls:0,disablekb:1,fs:0,modestbranding:1,rel:0,playsinline:1,mute:1,loop:1,playlist:YT_ID,iv_load_policy:3},
+          playerVars:{
+            autoplay:1,
+            controls:0,
+            disablekb:1,
+            fs:0,
+            modestbranding:1,
+            rel:0,
+            playsinline:1,
+            mute:1,
+            // Без loop – один прогон
+            iv_load_policy:3,
+            origin: location.origin
+          },
           events:{onReady:onPlayerReady,onStateChange:onStateChange}
         });
       }
 
-      function onPlayerReady(){sizeIframe();window.addEventListener('resize',sizeIframe);showLoader();player.playVideo();}
-      function onStateChange(e){if(e.data===YT.PlayerState.PLAYING) markStarted();}
-      function markStarted(){if(hasStarted) return;hasStarted=true;hideLoader();scheduleLogo();}
+      function onPlayerReady(){
+        sizeIframe();
+        window.addEventListener('resize',sizeIframe);
+        showLoader();
+        try{ player.playVideo(); }catch(e){}
+      }
+
+      function onStateChange(e){
+        const PS = YT.PlayerState;
+        if(e.data===PS.PLAYING){
+          markStarted();
+          startFreezeWatch();
+        } else if(e.data===PS.ENDED){
+          // На всякий – если дошли до ENDED, сразу откатываемся на последний кадр
+          freezeToLastFrame();
+        }
+      }
+
+      function markStarted(){
+        if(hasStarted) return;
+        hasStarted=true;
+        hideLoader();
+        scheduleLogo();
+      }
+
+      function startFreezeWatch(){
+        clearInterval(watchTimer);
+        watchTimer=setInterval(()=>{
+          if(!player || frozen) return;
+          const dur = player.getDuration ? player.getDuration() : 0;
+          const cur = player.getCurrentTime ? player.getCurrentTime() : 0;
+          if(dur>0 && cur >= dur - 0.06){
+            freezeToLastFrame();
+          }
+        }, 80);
+      }
+
+      function freezeToLastFrame(){
+        if(frozen || !player) return;
+        try{
+          const dur = player.getDuration();
+          // Перемещаемся за мгновение до конца и пауза – кадр остаётся на экране
+          if(dur>0) player.seekTo(Math.max(dur - 0.06, 0), true);
+          player.pauseVideo();
+          frozen = true;
+          clearInterval(watchTimer);
+          // Щит поверх – чтобы не всплыл ютубовский UI при окончании
+          shield.style.pointerEvents = 'auto';
+        }catch(e){}
+      }
 
       function sizeIframe(){
         const iframe=ytbg.querySelector('iframe');if(!iframe) return;
@@ -126,7 +188,11 @@
         setTimeout(()=>{logo.style.display='none';},700);
         reveal.classList.add('visible');cta.classList.add('visible');
       });
-      function reset(){reveal.classList.remove('visible');cta.classList.remove('visible');logo.style.display='';logo.classList.remove('fading');requestAnimationFrame(()=>logo.classList.add('visible'));interacted=false;}
+      function reset(){
+        reveal.classList.remove('visible');cta.classList.remove('visible');
+        logo.style.display='';logo.classList.remove('fading');
+        requestAnimationFrame(()=>logo.classList.add('visible'));interacted=false;
+      }
       reveal.addEventListener('click',reset);
       document.addEventListener('keydown',e=>{if(e.key==='Escape') reset();});
 
