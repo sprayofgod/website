@@ -244,6 +244,14 @@ body {
   letter-spacing: 0.02em;
   text-transform: uppercase;
   perspective: 200px;
+   background: linear-gradient(to bottom, 
+    white 0%, 
+    white 50%, 
+    lightblue 50%, 
+    lightblue 100%);
+
+  background-clip: text;
+  text-fill-color: transparent;
 }
 
 .w3l-errorhny-main1 h2 {
@@ -261,7 +269,7 @@ body {
 
 .w3l-errorhny-main1 h1::before,
 .w3l-errorhny-main1 h1::after {
-  content: attr(aria-label);
+  /* content: attr(aria-label); */
   position: absolute;
   width:800px;
   text-align: center;
